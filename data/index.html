@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Serial Monitor</title>
+    <style>
+        body {
+            font-family: monospace;
+            background-color: #000;
+            color: #0f0;
+        }
+        #terminal {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <h1>ESP32 Serial Monitor</h1>
+    <div id="terminal"></div>
+    <script>
+        setInterval(async () => {
+            const res = await fetch('/serial');
+            const text = await res.text();
+            document.getElementById('terminal').innerText = text;
+        }, 1000);
+    </script>
+</body>
+</html>

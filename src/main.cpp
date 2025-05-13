@@ -1,20 +1,24 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ArduinoOTA.h>
-#include <WiFiServer.h>
 #include <Wire.h>
 #include <Adafruit_MLX90614.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
+#include <ESPAsyncWebServer.h>
+#include <LittleFS.h>
 
 void initWiFi();
 void connectToWiFi(const String &ssid, const String &password);
-void setupMQTT();
+void initMQTT();
 void mqttCallback(char* topic, byte* payload, unsigned int length);
+void initLittleFS();
+
 Preferences wificonfig;
 
-WiFiServer telnetServer(23);
-WiFiClient telnetClient;
+AsyncWebServer server(80); // Create an AsyncWebServer on port 80
+String serialBuffer = ""; // Buffer to store serial data
+
 TaskHandle_t otaTaskHandle;
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
@@ -28,6 +32,7 @@ const char* mqttPassword = "password"; // Replace with your MQTT password
 const char* mqttTopic = "mario/tempgun/temperature"; // Replace with your MQTT topic
 
 void otaTask(void *parameter) {
+    ArduinoOTA.begin();
     for (;;) {
         ArduinoOTA.handle();
         //Serial.println("OTA handle");
@@ -38,11 +43,18 @@ void otaTask(void *parameter) {
 void setup() {
     Serial.begin(115200);
     initWiFi();
-    
-    ArduinoOTA.begin();
+    initLittleFS();
 
-    telnetServer.begin();
-    telnetServer.setNoDelay(true);
+    // Serve the external HTML file
+    server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
+
+    // Serve the serial data
+    server.on("/serial", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/plain", serialBuffer);
+    });
+
+    server.begin(); // Start the server
+    Serial.println("Web server started");
 
     xTaskCreate(
         otaTask,          // Task function
@@ -62,29 +74,19 @@ void setup() {
     }
     Serial.println("MLX90614 sensor initialized.");
 
-    setupMQTT(); // Initialize MQTT connection
+    initMQTT(); // Initialize MQTT connection
 }
 
 unsigned long lastTempReadTime = 0;
 
 void loop() {
-    // Handle Telnet client
-    if (telnetServer.hasClient()) {
-        if (!telnetClient || !telnetClient.connected()) {
-            if (telnetClient) telnetClient.stop();
-            telnetClient = telnetServer.available();
-            Serial.println("New Telnet client connected");
-        } else {
-            telnetServer.available().stop(); // Reject new client
+    // Update the serial buffer with new data
+    while (Serial.available()) {
+        serialBuffer += (char)Serial.read();
+        if (serialBuffer.length() > 1000) { // Limit buffer size
+            serialBuffer = serialBuffer.substring(serialBuffer.length() - 1000);
         }
     }
-
-    if (telnetClient && telnetClient.connected()) {
-        while (telnetClient.available()) {
-            Serial.write(telnetClient.read()); // Echo data to Serial
-        }
-    }
-
 
     // Non-blocking temperature data read
     unsigned long currentMillis = millis();
@@ -95,9 +97,6 @@ void loop() {
         float objectTemp = mlx.readObjectTempC();
 
         String tempMessage = "Ambient: " + String(ambientTemp) + " C, Object: " + String(objectTemp) + " C";
-        if (telnetClient && telnetClient.connected()) {
-            telnetClient.println(tempMessage);
-        }
         Serial.println(tempMessage);
 
         // Publish sensor values to MQTT
@@ -152,7 +151,7 @@ void initWiFi() {
     wificonfig.end(); // Close Preferences after use
 }
 
-void setupMQTT() {
+void initMQTT() {
     mqttClient.setServer(mqttServer, mqttPort);
     mqttClient.setCallback(mqttCallback); // Set the callback function for incoming messages
 
@@ -160,7 +159,7 @@ void setupMQTT() {
         Serial.println("Connecting to MQTT...");
         if (mqttClient.connect("ESP32Client", mqttUser, mqttPassword)) {
             Serial.println("Connected to MQTT broker");
-            mqttClient.subscribe("sensor/commands"); // Example subscription
+            //mqttClient.subscribe("sensor/commands"); // Example subscription
         } else {
             Serial.print("Failed to connect to MQTT. State: ");
             Serial.println(mqttClient.state());
@@ -177,4 +176,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         Serial.print((char)payload[i]);
     }
     Serial.println();
+}
+
+void initLittleFS(){
+    if (!LittleFS.begin()) {
+        Serial.println("An Error has occurred while mounting LittleFS");
+    }
 }
