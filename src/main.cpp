@@ -5,7 +5,6 @@
 #include <Adafruit_MLX90614.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
-#include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
 
 void initWiFi();
@@ -14,22 +13,13 @@ void initMQTT();
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 void initLittleFS();
 
-Preferences wificonfig;
-
-AsyncWebServer server(80); // Create an AsyncWebServer on port 80
-String serialBuffer = ""; // Buffer to store serial data
+Preferences preferences;
 
 TaskHandle_t otaTaskHandle;
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
-
-const char* mqttServer = "10.115.63.131"; // Replace with your MQTT broker address
-const int mqttPort = 1883; // Replace with your MQTT broker port
-const char* mqttUser = "username"; // Replace with your MQTT username
-const char* mqttPassword = "password"; // Replace with your MQTT password
-const char* mqttTopic = "mario/tempgun/temperature"; // Replace with your MQTT topic
 
 void otaTask(void *parameter) {
     ArduinoOTA.begin();
@@ -44,17 +34,6 @@ void setup() {
     Serial.begin(115200);
     initWiFi();
     initLittleFS();
-
-    // Serve the external HTML file
-    server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
-
-    // Serve the serial data
-    server.on("/serial", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/plain", serialBuffer);
-    });
-
-    server.begin(); // Start the server
-    Serial.println("Web server started");
 
     xTaskCreate(
         otaTask,          // Task function
@@ -80,17 +59,9 @@ void setup() {
 unsigned long lastTempReadTime = 0;
 
 void loop() {
-    // Update the serial buffer with new data
-    while (Serial.available()) {
-        serialBuffer += (char)Serial.read();
-        if (serialBuffer.length() > 1000) { // Limit buffer size
-            serialBuffer = serialBuffer.substring(serialBuffer.length() - 1000);
-        }
-    }
-
     // Non-blocking temperature data read
     unsigned long currentMillis = millis();
-    if (currentMillis - lastTempReadTime >= 1000) {
+    if (currentMillis - lastTempReadTime >= 100) {
         lastTempReadTime = currentMillis;
 
         float ambientTemp = mlx.readAmbientTempC();
@@ -99,11 +70,13 @@ void loop() {
         String tempMessage = "Ambient: " + String(ambientTemp) + " C, Object: " + String(objectTemp) + " C";
         Serial.println(tempMessage);
 
-        // Publish sensor values to MQTT
+        // Publish sensor values to separate MQTT topics
         if (mqttClient.connected()) {
-            String payload = "{\"ambient\": " + String(ambientTemp) + ", \"object\": " + String(objectTemp) + "}";
-            mqttClient.publish(mqttTopic, payload.c_str());
-            Serial.println("Published to MQTT: " + payload);
+            String ambientPayload = String(ambientTemp);
+            String objectPayload = String(objectTemp);
+            mqttClient.publish("mario/tempgun/temperature/ambient", ambientPayload.c_str());
+            mqttClient.publish("mario/tempgun/temperature/object", objectPayload.c_str());
+            Serial.println("Published to MQTT: ambient=" + ambientPayload + ", object=" + objectPayload);
         }
     }
 
@@ -130,12 +103,14 @@ void connectToWiFi(const String &ssid, const String &password) {
 }
 
 void initWiFi() {
-    wificonfig.begin("wificonfig", false);
+    preferences.begin("wificonfig", false);
 
-    String ssid1 = wificonfig.getString("SSID1");
-    String password1 = wificonfig.getString("PASSWORD1");
-    String ssid2 = wificonfig.getString("SSID2");
-    String password2 = wificonfig.getString("PASSWORD2");
+    String ssid1 = preferences.getString("SSID1");
+    String password1 = preferences.getString("PASSWORD1");
+    String ssid2 = preferences.getString("SSID2");
+    String password2 = preferences.getString("PASSWORD2");
+
+    preferences.end();
 
     connectToWiFi(ssid1, password1);
 
@@ -147,17 +122,23 @@ void initWiFi() {
         Serial.println("Failed to connect to any WiFi network. Restarting...");
         ESP.restart();
     }
-
-    wificonfig.end(); // Close Preferences after use
+ // Close Preferences after use
 }
 
 void initMQTT() {
-    mqttClient.setServer(mqttServer, mqttPort);
+    preferences.begin("mqttconfig", false);
+    String MqttServer = preferences.getString("MQTT_SERVER");
+    int MqttPort = preferences.getInt("MQTT_PORT");
+    String MqttUser = preferences.getString("MQTT_USER");
+    String MqttPassword = preferences.getString("MQTT_PASSWORD");
+    preferences.end();
+
+    mqttClient.setServer(MqttServer.c_str(), MqttPort);
     mqttClient.setCallback(mqttCallback); // Set the callback function for incoming messages
 
     while (!mqttClient.connected()) {
         Serial.println("Connecting to MQTT...");
-        if (mqttClient.connect("ESP32Client", mqttUser, mqttPassword)) {
+        if (mqttClient.connect("ESP32Client", MqttUser.c_str(), MqttPassword.c_str())) {
             Serial.println("Connected to MQTT broker");
             //mqttClient.subscribe("sensor/commands"); // Example subscription
         } else {
