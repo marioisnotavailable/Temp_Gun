@@ -35,6 +35,9 @@ void setup() {
     initWiFi();
     initLittleFS();
 
+    pinMode(36, INPUT);
+    analogSetAttenuation(ADC_11db);
+
     xTaskCreate(
         otaTask,          // Task function
         "OTA Task",      // Name of the task
@@ -53,7 +56,7 @@ void setup() {
     }
     Serial.println("MLX90614 sensor initialized.");
 
-    initMQTT(); // Initialize MQTT connection
+    //initMQTT(); // Initialize MQTT connection
 }
 
 unsigned long lastTempReadTime = 0;
@@ -66,21 +69,25 @@ void loop() {
 
         float ambientTemp = mlx.readAmbientTempC();
         float objectTemp = mlx.readObjectTempC();
+        String ambientTempStr = String(ambientTemp).c_str();
+        String objectTempStr = String(objectTemp).c_str();
 
-        String tempMessage = "Ambient: " + String(ambientTemp) + " C, Object: " + String(objectTemp) + " C";
-        Serial.println(tempMessage);
+        Serial.printf("Ambient: %s C, Object: %s C\n", ambientTempStr.c_str(),objectTempStr.c_str());
 
         // Publish sensor values to separate MQTT topics
         if (mqttClient.connected()) {
-            String ambientPayload = String(ambientTemp);
-            String objectPayload = String(objectTemp);
-            mqttClient.publish("mario/tempgun/temperature/ambient", ambientPayload.c_str());
-            mqttClient.publish("mario/tempgun/temperature/object", objectPayload.c_str());
-            Serial.println("Published to MQTT: ambient=" + ambientPayload + ", object=" + objectPayload);
+            mqttClient.publish("mario/tempgun/temperature/ambient", ambientTempStr.c_str());
+            mqttClient.publish("mario/tempgun/temperature/object", objectTempStr.c_str());
+            Serial.printf("Published to MQTT: ambient=%s, object=%s\n", ambientTempStr.c_str(), objectTempStr.c_str());
         }
     }
 
     mqttClient.loop(); // Ensure MQTT client stays connected and processes incoming messages
+
+    // Read battery voltage on sensor VP (GPIO 36) with 1:1 voltage divider
+    int raw = analogRead(36);
+    float voltage = (raw / 4095.0) * 3.3 * 2.0;
+    Serial.printf("Batterie = %.3f V (raw=%d)\n", voltage, raw);
 
     // Removed ArduinoOTA.handle() from loop
 }
@@ -127,10 +134,12 @@ void initWiFi() {
 
 void initMQTT() {
     preferences.begin("mqttconfig", false);
+
     String MqttServer = preferences.getString("MQTT_SERVER");
     int MqttPort = preferences.getInt("MQTT_PORT");
     String MqttUser = preferences.getString("MQTT_USER");
     String MqttPassword = preferences.getString("MQTT_PASSWORD");
+    
     preferences.end();
 
     mqttClient.setServer(MqttServer.c_str(), MqttPort);
@@ -156,7 +165,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     for (int i = 0; i < length; i++) {
         Serial.print((char)payload[i]);
     }
-    Serial.println();
 }
 
 void initLittleFS(){
