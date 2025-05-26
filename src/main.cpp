@@ -12,23 +12,13 @@ void connectToWiFi(const String &ssid, const String &password);
 void initMQTT();
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 void initLittleFS();
+void otaTask(void *parameter);
 
 Preferences preferences;
-
 TaskHandle_t otaTaskHandle;
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
-
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
-
-void otaTask(void *parameter) {
-    ArduinoOTA.begin();
-    for (;;) {
-        ArduinoOTA.handle();
-        //Serial.println("OTA handle");
-        vTaskDelay(1000 / portTICK_PERIOD_MS); // Delay for 1 second
-    }
-}
 
 void setup() {
     Serial.begin(115200);
@@ -47,8 +37,7 @@ void setup() {
         &otaTaskHandle    // Task handle
     );
 
-    // Initialize I2C with custom pins
-    Wire.begin(15, 2); // SDA on GPIO 23, SCL on GPIO 24
+    Wire.begin(15, 2); // Initialize I2C with GPIO 15 (SDA) and GPIO 2 (SCL)
 
     // Initialize MLX90614 sensor
     if (!mlx.begin()) {
@@ -88,8 +77,6 @@ void loop() {
     int raw = analogRead(36);
     float voltage = (raw / 4095.0) * 3.3 * 2.0;
     Serial.printf("Batterie = %.3f V (raw=%d)\n", voltage, raw);
-
-    // Removed ArduinoOTA.handle() from loop
 }
 
 void connectToWiFi(const String &ssid, const String &password) {
@@ -139,7 +126,7 @@ void initMQTT() {
     int MqttPort = preferences.getInt("MQTT_PORT");
     String MqttUser = preferences.getString("MQTT_USER");
     String MqttPassword = preferences.getString("MQTT_PASSWORD");
-    
+
     preferences.end();
 
     mqttClient.setServer(MqttServer.c_str(), MqttPort);
@@ -170,5 +157,14 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 void initLittleFS(){
     if (!LittleFS.begin()) {
         Serial.println("An Error has occurred while mounting LittleFS");
+    }
+}
+
+void otaTask(void *parameter) {
+    ArduinoOTA.begin();
+    for (;;) {
+        ArduinoOTA.handle();
+        //Serial.println("OTA handle");
+        vTaskDelay(1000 / portTICK_PERIOD_MS); // Delay for 1 second
     }
 }
