@@ -11,6 +11,8 @@ void connectToWiFi(const String &ssid, const String &password);
 void initMQTT();
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 void otaTask(void *parameter);
+void Batterie();
+void deepsleep();
 
 Preferences preferences;
 TaskHandle_t otaTaskHandle;
@@ -20,6 +22,9 @@ PubSubClient mqttClient(espClient);
 
 void setup() {
     Serial.begin(115200);
+
+    deepsleep();
+
     initWiFi();
 
     pinMode(36, INPUT);
@@ -38,9 +43,9 @@ void setup() {
 
     // Initialize MLX90614 sensor
     if (!mlx.begin()) {
-        Serial.println("Error initializing MLX90614 sensor! Restarting...");
+        Serial.printf("Error initializing MLX90614 sensor! Restarting...\n");
     }
-    Serial.println("MLX90614 sensor initialized.");
+    Serial.printf("MLX90614 sensor initialized.\n");
 
     //initMQTT(); // Initialize MQTT connection
 }
@@ -70,10 +75,7 @@ void loop() {
 
     mqttClient.loop(); // Ensure MQTT client stays connected and processes incoming messages
 
-    // Read battery voltage on sensor VP (GPIO 36) with 1:1 voltage divider
-    int raw = analogRead(36);
-    float voltage = (raw / 4095.0) * 3.3 * 2.0;
-    Serial.printf("Batterie = %.3f V (raw=%d)\n", voltage, raw);
+    Batterie();// Read battery voltage on sensor VP (GPIO 36) with 1:1 voltage divider
 }
 
 void connectToWiFi(const String &ssid, const String &password) {
@@ -81,7 +83,7 @@ void connectToWiFi(const String &ssid, const String &password) {
     WiFi.begin(ssid, password);
     Serial.printf("Connecting to WiFi: %s\n", ssid.c_str());
 
-    while (WiFi.status() != WL_CONNECTED && connectionTries < 20) {
+    while (WiFi.status() != WL_CONNECTED && connectionTries < 10) {
         delay(1000);
         Serial.print(".");
         connectionTries++;
@@ -158,4 +160,33 @@ void otaTask(void *parameter) {
         //Serial.println("OTA handle");
         vTaskDelay(1000 / portTICK_PERIOD_MS); // Delay for 1 second
     }
+}
+
+void Batterie(){
+    static int raw = 0;
+    raw += analogRead(36);
+    static int count = 0;
+    if(count++ > 1000) {
+        float voltage = (raw / 1000 / 4095.0) * 3.3 * 2.0;
+        Serial.printf("Batterie = %.3f V (raw=%d)\n", voltage, raw);
+        raw = 0;
+        count = 0;
+    }
+}
+
+void deepsleep() {
+    preferences.begin("deepsleep", false);
+
+    if (preferences.getBool("DEEPSLEEP", false)) {
+        preferences.putBool("DEEPSLEEP", false);
+        Serial.printf("Entering deep sleep mode with no wakeup...\n");
+        preferences.end();
+        esp_deep_sleep_start();
+    }
+
+    preferences.putBool("DEEPSLEEP", true);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    preferences.putBool("DEEPSLEEP", false);
+
+    preferences.end();
 }
