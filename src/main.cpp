@@ -185,7 +185,7 @@ void deepsleep() {
     }
 
     preferences.putBool("DEEPSLEEP", true);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
     preferences.putBool("DEEPSLEEP", false);
 
     preferences.end();
