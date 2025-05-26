@@ -5,13 +5,11 @@
 #include <Adafruit_MLX90614.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
-#include <LittleFS.h>
 
 void initWiFi();
 void connectToWiFi(const String &ssid, const String &password);
 void initMQTT();
 void mqttCallback(char* topic, byte* payload, unsigned int length);
-void initLittleFS();
 void otaTask(void *parameter);
 
 Preferences preferences;
@@ -23,7 +21,6 @@ PubSubClient mqttClient(espClient);
 void setup() {
     Serial.begin(115200);
     initWiFi();
-    initLittleFS();
 
     pinMode(36, INPUT);
     analogSetAttenuation(ADC_11db);
@@ -151,12 +148,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     Serial.print("Message: ");
     for (int i = 0; i < length; i++) {
         Serial.print((char)payload[i]);
-    }
-}
-
-void initLittleFS(){
-    if (!LittleFS.begin()) {
-        Serial.println("An Error has occurred while mounting LittleFS");
     }
 }
 
