@@ -43,7 +43,7 @@ void setup() {
 
     // Initialize MLX90614 sensor
     if (!mlx.begin()) {
-        Serial.printf("Error initializing MLX90614 sensor! Restarting...\n");
+        Serial.printf("Error initializing MLX90614 sensor!\n");
     }
     Serial.printf("MLX90614 sensor initialized.\n");
 
@@ -84,13 +84,13 @@ void connectToWiFi(const String &ssid, const String &password) {
     Serial.printf("Connecting to WiFi: %s\n", ssid.c_str());
 
     while (WiFi.status() != WL_CONNECTED && connectionTries < 10) {
-        delay(1000);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
         Serial.print(".");
         connectionTries++;
     }
-
+    Serial.println();
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("\nConnected to WiFi: %s\n", ssid.c_str());
+        Serial.printf("Connected to WiFi: %s\n", ssid.c_str());
         Serial.printf("IP Address: %s\n", WiFi.localIP().toString().c_str());
     }
 }
@@ -139,7 +139,7 @@ void initMQTT() {
         } else {
             Serial.print("Failed to connect to MQTT. State: ");
             Serial.println(mqttClient.state());
-            delay(2000);
+            vTaskDelay(2000 / portTICK_PERIOD_MS);
         }
     }
 }
@@ -185,6 +185,7 @@ void deepsleep() {
     }
 
     preferences.putBool("DEEPSLEEP", true);
+    Serial.printf("Restart now for deepsleep\n");
     vTaskDelay(5000 / portTICK_PERIOD_MS);
     preferences.putBool("DEEPSLEEP", false);
 
