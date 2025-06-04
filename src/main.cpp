@@ -199,8 +199,8 @@ void Batterie()
 
         if (mqttClient.connected())
         {
-            mqttClient.publish("mario/tempgun/battery", String(voltage,3).c_str());
-            Serial.printf("Published battery voltage to MQTT: %s V\n", String(voltage,3).c_str());
+            mqttClient.publish("mario/tempgun/battery", String(voltage, 3).c_str());
+            Serial.printf("Published battery voltage to MQTT: %s V\n", String(voltage, 3).c_str());
         }
     }
 }
