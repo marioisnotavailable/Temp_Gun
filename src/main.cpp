@@ -29,7 +29,6 @@ void setup()
     initWiFi();
 
     pinMode(36, INPUT);
-    analogSetAttenuation(ADC_11db);
 
     xTaskCreate(
         otaTask,       // Task function
@@ -185,19 +184,23 @@ void otaTask(void *parameter)
 void Batterie()
 {
     static int raw = 0;
-    raw += analogRead(36);
+    raw += analogRead(36); // Accumulate ADC readings
     static int count = 0;
-    if (count++ > 1000)
+
+    if (count++ > 1000) // Average over 1000 readings
     {
-        float voltage = (raw / 1000 / 4095.0) * 3.3 * 2.0;
-        Serial.printf("Batterie = %.3f V (raw=%d)\n", voltage, raw);
+        float R1 = 1e6; // 1 MΩ
+        float R2 = 1e6; // 1 MΩ
+        float voltage = ((raw / 1000.0) / 4095.0) * 3.3 * 2;
+
+        Serial.printf("Batterie  = %.3f V (raw=%d)\n", voltage, raw);
         raw = 0;
         count = 0;
+
         if (mqttClient.connected())
         {
-            String batteryVoltage = String(voltage, 3);
-            mqttClient.publish("mario/tempgun/battery", batteryVoltage.c_str());
-            Serial.printf("Published battery voltage to MQTT: %s V\n", batteryVoltage.c_str());
+            mqttClient.publish("mario/tempgun/battery", String(voltage,3).c_str());
+            Serial.printf("Published battery voltage to MQTT: %s V\n", String(voltage,3).c_str());
         }
     }
 }
