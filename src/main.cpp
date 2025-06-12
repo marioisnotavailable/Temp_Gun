@@ -20,8 +20,6 @@ Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
-extern "C" uint8_t temprature_sens_read();
-
 void setup()
 {
     Serial.begin(115200);
@@ -65,7 +63,7 @@ void loop()
 
         float ambientTemp = mlx.readAmbientTempC();
         float objectTemp = mlx.readObjectTempC();
-        float internalTemp = (temprature_sens_read() - 32) / 1.8;
+        float internalTemp = temperatureRead();
         String ambientTempStr = String(ambientTemp).c_str();
         String objectTempStr = String(objectTemp).c_str();
         String internalTempStr = String(internalTemp, 2);
