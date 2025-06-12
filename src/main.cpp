@@ -20,9 +20,7 @@ Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
-#ifdef ESP32
 extern "C" uint8_t temprature_sens_read();
-#endif
 
 void setup()
 {
