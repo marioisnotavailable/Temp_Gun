@@ -20,6 +20,10 @@ Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
+#ifdef ESP32
+extern "C" uint8_t temprature_sens_read();
+#endif
+
 void setup()
 {
     Serial.begin(115200);
@@ -63,8 +67,10 @@ void loop()
 
         float ambientTemp = mlx.readAmbientTempC();
         float objectTemp = mlx.readObjectTempC();
+        float internalTemp = (temprature_sens_read() - 32) / 1.8;
         String ambientTempStr = String(ambientTemp).c_str();
         String objectTempStr = String(objectTemp).c_str();
+        String internalTempStr = String(internalTemp, 2);
 
         Serial.printf("Ambient: %s C, Object: %s C\n", ambientTempStr.c_str(), objectTempStr.c_str());
 
@@ -73,7 +79,8 @@ void loop()
         {
             mqttClient.publish("mario/tempgun/temperature/ambient", ambientTempStr.c_str());
             mqttClient.publish("mario/tempgun/temperature/object", objectTempStr.c_str());
-            Serial.printf("Published to MQTT: ambient=%s, object=%s\n", ambientTempStr.c_str(), objectTempStr.c_str());
+            mqttClient.publish("mario/tempgun/temperature/internal", internalTempStr.c_str());
+            Serial.printf("Published to MQTT: ambient=%s, object=%s, internal=%s\n", ambientTempStr.c_str(), objectTempStr.c_str(), internalTempStr.c_str());
         }
     }
 
