@@ -48,27 +48,30 @@ void setup()
     }
     Serial.printf("MLX90614 sensor initialized.\n");
 
-    // initMQTT(); // Initialize MQTT connection
+    initMQTT(); // Initialize MQTT connection
+
+    pinMode(27, OUTPUT); // Set the built-in LED pin as output
 }
 
 unsigned long lastTempReadTime = 0;
 
 void loop()
 {
+    digitalWrite(27, HIGH); // Turn on the built-in LED
     // Non-blocking temperature data read
     unsigned long currentMillis = millis();
-    if (currentMillis - lastTempReadTime >= 100)
+    if (currentMillis - lastTempReadTime >= 1000)
     {
         lastTempReadTime = currentMillis;
 
-        float ambientTemp = mlx.readAmbientTempC();
-        float objectTemp = mlx.readObjectTempC();
+        float ambientTemp = 0;//mlx.readAmbientTempC();
+        float objectTemp = 0;//mlx.readObjectTempC();
         float internalTemp = temperatureRead();
-        String ambientTempStr = String(ambientTemp).c_str();
-        String objectTempStr = String(objectTemp).c_str();
+        String ambientTempStr = String(ambientTemp, 2);
+        String objectTempStr = String(objectTemp, 2);
         String internalTempStr = String(internalTemp, 2);
 
-        Serial.printf("Ambient: %s C, Object: %s C\n", ambientTempStr.c_str(), objectTempStr.c_str());
+        Serial.printf("ambient=%s, object=%s, internal=%s\n", ambientTempStr.c_str(), objectTempStr.c_str(), internalTempStr.c_str());
 
         // Publish sensor values to separate MQTT topics
         if (mqttClient.connected())
@@ -190,11 +193,11 @@ void Batterie()
     raw += analogRead(36); // Accumulate ADC readings
     static int count = 0;
 
-    if (count++ > 1000) // Average over 1000 readings
+    if (count++ > 10000) // Average over 1000 readings
     {
         float R1 = 1e6; // 1 MΩ
         float R2 = 1e6; // 1 MΩ
-        float voltage = ((raw / 1000.0) / 4095.0) * 3.3 * 2;
+        float voltage = ((raw / 10000.0) / 4095.0) * 3.3 * 2;
 
         Serial.printf("Batterie  = %.3f V (raw=%d)\n", voltage, raw);
         raw = 0;
